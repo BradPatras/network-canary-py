@@ -13,7 +13,7 @@ import platform
 # Configuration
 PING_TARGET = "1.1.1.1"
 PING_INTERVAL = 5  # seconds between pings when network is up
-PING_TIMEOUT = 3  # seconds to wait for ping response
+PING_TIMEOUT = 4  # seconds to wait for ping response
 WEBHOOK_FILE = "webhook-secret"
 
 
@@ -23,12 +23,14 @@ def load_webhook_url():
 		with open(WEBHOOK_FILE, 'r') as f:
 			url = f.read().strip()
 			if url and not url.startswith("http"):
-				print(f"Error: Invalid webhook URL in {WEBHOOK_FILE}")
+				print(f" !! Invalid webhook URL in {WEBHOOK_FILE}")
 				sys.exit(1)
 			return url
 	except FileNotFoundError:
-		print(f"Error: {WEBHOOK_FILE} not found")
-		sys.exit(1)
+		print(f" ")
+		print(f" ?? Discord notifications disabled!")
+		print(f" ?? To enable, create the file \"{WEBHOOK_FILE}\" in the script directory and add your Discord webhook URL.")
+		return None
 
 
 def ping(host, timeout):
@@ -80,6 +82,10 @@ def format_duration(duration):
 
 
 def send_discord_notification(webhook_url, downtime_start, downtime_end, duration):
+	if not webhook_url:
+		print(" !! Discord webhook URL not configured, skipping notification.")
+		return False
+
 	duration_str = format_duration(duration)
 	
 	message = {
