@@ -13,6 +13,7 @@ import platform
 # Configuration
 PING_TARGET = "1.1.1.1"
 PING_INTERVAL = 5  # seconds between pings when network is up
+PING_RETRY_COUNT = 3  # number of times ping will retry before declaring network down
 PING_TIMEOUT = 4  # seconds to wait for ping response
 WEBHOOK_FILE = "webhook-secret"
 
@@ -35,32 +36,42 @@ def load_webhook_url():
 
 def ping(host, timeout):
 	# ping a host and return True if reachable, False otherwise
-	try:
-		system = platform.system().lower()
-		
-		if system == "windows":
-			# Windows: ping -n <count> -w <timeout_ms> <host>
-			command = ['ping', '-n', '1', '-w', str(timeout * 1000), host]
-		else:
-			# macOS and Linux: ping -c <count> -W <timeout_sec> <host>
-			# Note: macOS uses -W in milliseconds, Linux uses seconds
-			if system == "darwin":  # macOS
-				command = ['ping', '-c', '1', '-W', str(timeout * 1000), host]
-			else:  # Linux and other Unix-like systems
-				command = ['ping', '-c', '1', '-W', str(timeout), host]
-		
-		result = subprocess.run(
-			command,
-			stdout=subprocess.DEVNULL,
-			stderr=subprocess.DEVNULL,
-			timeout=timeout + 1
-		)
-		return result.returncode == 0
-	except subprocess.TimeoutExpired:
-		return False
-	except Exception as e:
-		print(f" !! Ping error: {e}")
-		return False
+	# will retry PING_RETRY_COUNT times before returning False
+	retryCount = 0
+	success = False
+	while retryCount < PING_RETRY_COUNT and not success:
+		print(f" ++ Pinging {host} (attempt {retryCount + 1}/{PING_RETRY_COUNT})...", end=' ')
+		try:
+			system = platform.system().lower()
+			
+			if system == "windows":
+				# Windows: ping -n <count> -w <timeout_ms> <host>
+				command = ['ping', '-n', '1', '-w', str(timeout * 1000), host]
+			else:
+				# macOS and Linux: ping -c <count> -W <timeout_sec> <host>
+				# Note: macOS uses -W in milliseconds, Linux uses seconds
+				if system == "darwin":  # macOS
+					command = ['ping', '-c', '1', '-W', str(timeout * 1000), host]
+				else:  # Linux and other Unix-like systems
+					command = ['ping', '-c', '1', '-W', str(timeout), host]
+			
+			result = subprocess.run(
+				command,
+				stdout=subprocess.DEVNULL,
+				stderr=subprocess.DEVNULL,
+				timeout=timeout + 1
+			)
+
+			if result.returncode == 0:
+				success = True
+			else:
+				retryCount += 1
+		except subprocess.TimeoutExpired:
+			retryCount += 1
+		except Exception as e:
+			print(f" !! Ping error: {e}")
+			retryCount += 1
+	return success
 
 
 def format_duration(duration):
